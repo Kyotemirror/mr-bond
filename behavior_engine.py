@@ -28,6 +28,8 @@ class BehaviorEngine:
         # Idle micro-behavior (non-blocking) tracking
         self.micro_active = False
         self.micro_end_time = 0.0
+        self.MICRO_DURATION = 0.2 
+        self.MICRO_MEAN_INTERVAL = 8.0   # average time between idle micro-smile
         self.next_micro_time = self.last_state_change + self._sample_next_micro_delay()
 
         # Tunables
@@ -36,6 +38,7 @@ class BehaviorEngine:
         self.SAD_DURATION = 3.0
         self.MICRO_DURATION = 0.2
         self.MICRO_MEAN_INTERVAL = 8.0  # average time between idle micro-smiles
+        
 
         # Set initial expression
         self.face.set_expression("neutral")
