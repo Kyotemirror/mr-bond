@@ -1,0 +1,2 @@
+# mr-bond
+ai husky
