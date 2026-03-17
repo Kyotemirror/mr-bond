@@ -5,6 +5,7 @@ import time
 import audioop
 
 import sounddevice as sd
+sd.default.device = (1, None)
 from vosk import Model, KaldiRecognizer
 
 class VoiceEngine:
@@ -75,6 +76,7 @@ class VoiceEngine:
             blocksize=8000,
             dtype="int16",
             channels=1,
+            device=1,
             callback=self._audio_cb
         ):
             while self.running:
