@@ -2,6 +2,7 @@ import tkinter as tk
 import time
 import random
 
+
 class FaceEngine:
     def __init__(self, config=None):
         self.window = tk.Tk()
@@ -10,8 +11,11 @@ class FaceEngine:
         self.window.configure(bg="black")
 
         self.canvas = tk.Canvas(
-            self.window, width=400, height=400,
-            bg="black", highlightthickness=0
+            self.window,
+            width=400,
+            height=400,
+            bg="black",
+            highlightthickness=0
         )
         self.canvas.pack()
 
@@ -32,7 +36,7 @@ class FaceEngine:
         self._draw_face()
         self._apply_expression(self.current_expression)
 
-        # One initial pump to show the window
+        # Initial window pump
         self.window.update_idletasks()
         self.window.update()
 
@@ -43,11 +47,11 @@ class FaceEngine:
         return time.monotonic()
 
     def _schedule_next_blink(self):
-        # Blink randomly every 3–6 seconds (time-based, not FPS-based)
+        # Blink randomly every 3–6 seconds
         self.next_blink_time = self._now() + random.uniform(3.0, 6.0)
 
     # -----------------------------
-    # Drawing Functions
+    # Drawing
     # -----------------------------
     def _draw_face(self):
         self.canvas.delete("all")
@@ -64,11 +68,14 @@ class FaceEngine:
         self.left_brow = self.canvas.create_line(120, 130, 170, 135, width=5, fill="white")
         self.right_brow = self.canvas.create_line(230, 135, 280, 130, width=5, fill="white")
 
-        # Mouth (use smooth curve when we give it 3 points)
-        self.mouth = self.canvas.create_line(170, 250, 230, 250, width=5, fill="white", smooth=True)
+        # Mouth
+        self.mouth = self.canvas.create_line(
+            170, 250, 230, 250,
+            width=5, fill="white", smooth=True
+        )
 
     # -----------------------------
-    # Expression Logic
+    # Expression logic
     # -----------------------------
     def _apply_expression(self, expression):
         self.current_expression = expression
@@ -94,10 +101,9 @@ class FaceEngine:
             self.canvas.coords(self.mouth, 170, 250, 230, 250)
 
     # -----------------------------
-    # Blink Animation (non-blocking)
+    # Blink animation (non-blocking)
     # -----------------------------
     def _close_eyes(self):
-        # Close eyes: darken eye whites and hide pupils
         self.canvas.itemconfig(self.left_eye, fill="black")
         self.canvas.itemconfig(self.right_eye, fill="black")
         self.canvas.itemconfig(self.left_pupil, state="hidden")
@@ -110,17 +116,17 @@ class FaceEngine:
         self.canvas.itemconfig(self.right_pupil, state="normal")
 
     # -----------------------------
-    # Update Loop (called by your main)
+    # Update loop
     # -----------------------------
     def update(self):
         now = self._now()
 
-        # Apply pending expression changes here (so set_expression is cheap)
+        # Apply queued expression changes
         if self.pending_expression is not None:
             self._apply_expression(self.pending_expression)
             self.pending_expression = None
 
-        # Handle blink state machine
+        # Blink state machine
         if self.blinking:
             if now >= self.blink_end_time:
                 self._open_eyes()
@@ -130,11 +136,25 @@ class FaceEngine:
             if now >= self.next_blink_time:
                 self._close_eyes()
                 self.blinking = True
-                self.blink_end_time = now + 0.12  # blink closed duration
+                self.blink_end_time = now + 0.12
 
-        # Keep Tk responsive without forcing heavy redraw work
+        # Keep Tk responsive
         self.window.update_idletasks()
         self.window.update()
+
+    # -----------------------------
+    # Public API
+    # -----------------------------
+    def set_expression(self, expression):
+        # Queue expression change (cheap, non-blocking)
+        self.pending_expression = expression
+
+    def shutdown(self):
+        try:
+            self.window.destroy()
+        except Exception:
+            pass
+
 
     # -----------------------------
     # Public API
