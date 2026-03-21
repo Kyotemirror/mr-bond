@@ -5,19 +5,27 @@ import time
 import audioop
 
 import sounddevice as sd
-sd.default.device = (1, None)
 from vosk import Model, KaldiRecognizer
 
-class VoiceEngine:
-    def __init__(self, behavior, model_path="vosk-model-small-en-us-0.15"):
-        self.behavior = behavior
-        self.sample_rate = 16000
 
-        # Vosk model + recognizer
+class VoiceEngine:
+    def __init__(
+        self,
+        behavior,
+        model_path="vosk-model-small-en-us-0.15",
+        sample_rate=16000,
+        input_device=None,          # None = default input device
+        detect_blocksize=8000,
+        wake_phrase="hey husky",
+    ):
+        self.behavior = behavior
+        self.sample_rate = int(sample_rate)
+
+        # ---- Vosk model + recognizer ----
         self.model = Model(model_path)
 
-        # Two grammars (JSON lists). Grammar constrains recognition. [3](https://github.com/alphacep/vosk-api/blob/master/python/example/test_words.py)[5](https://github.com/alphacep/vosk-api/issues/878)
-        self.WAKE_PHRASE = "hey husky"
+        # Grammars constrain recognition
+        self.WAKE_PHRASE = wake_phrase.lower().strip()
         self.wake_grammar = json.dumps([self.WAKE_PHRASE, "[unk]"])
         self.cmd_grammar = json.dumps([
             "bark", "woof", "happy", "sad", "hello", "good boy", "good dog",
@@ -26,22 +34,30 @@ class VoiceEngine:
 
         self.rec = KaldiRecognizer(self.model, self.sample_rate, self.wake_grammar)
 
-        # Mode state
+        # ---- Mode state ----
         self.mode = "SLEEP"
         self.awake_until = 0.0
         self.AWAKE_WINDOW = 4.0  # seconds after wake word to accept commands
 
-        # Cooldowns to prevent spam
+        # ---- Cooldowns ----
         self.last_trigger_time = 0.0
         self.cooldown = 1.0
 
-        # Audio pipeline
+        # ---- Audio pipeline ----
         self.q = queue.Queue(maxsize=50)
         self.running = True
+        self._stop_event = threading.Event()
 
-        # Loudness tracking (for voice→emotion intensity)
+        # Loudness tracking (voice→emotion intensity)
         self._utter_rms_sum = 0.0
         self._utter_rms_n = 0
+
+        # Audio config
+        self.input_device = input_device
+        self.detect_blocksize = int(detect_blocksize)
+
+        # Stream handle (so shutdown can close it)
+        self._stream = None
 
         self.audio_thread = threading.Thread(target=self._audio_loop, daemon=True)
         self.asr_thread = threading.Thread(target=self._asr_loop, daemon=True)
@@ -50,8 +66,25 @@ class VoiceEngine:
 
         print("VoiceEngine: Offline wake-word + commands ready.")
 
+    # -----------------------------
+    # Lifecycle
+    # -----------------------------
     def shutdown(self):
         self.running = False
+        self._stop_event.set()
+
+        # Closing the stream helps unblock audio thread immediately
+        try:
+            if self._stream is not None:
+                self._stream.close()
+        except Exception:
+            pass
+
+        # Best-effort: unblock ASR thread if waiting on queue
+        try:
+            self.q.put_nowait(b"")
+        except Exception:
+            pass
 
     # -----------------------------
     # Audio capture
@@ -59,11 +92,17 @@ class VoiceEngine:
     def _audio_cb(self, indata, frames, time_info, status):
         if not self.running:
             return
+
+        # RawInputStream provides bytes-like buffers
         data = bytes(indata)
+
         # Track loudness from raw int16 mono audio bytes
-        rms = audioop.rms(data, 2)  # width=2 bytes (int16)
-        self._utter_rms_sum += rms
-        self._utter_rms_n += 1
+        try:
+            rms = audioop.rms(data, 2)  # width=2 bytes (int16)
+            self._utter_rms_sum += rms
+            self._utter_rms_n += 1
+        except Exception:
+            pass
 
         try:
             self.q.put_nowait(data)
@@ -71,36 +110,65 @@ class VoiceEngine:
             pass  # drop if overloaded
 
     def _audio_loop(self):
-        with sd.RawInputStream(
-            samplerate=self.sample_rate,
-            blocksize=8000,
-            dtype="int16",
-            channels=1,
-            device=1,
-            callback=self._audio_cb
-        ):
-            while self.running:
+        try:
+            self._stream = sd.RawInputStream(
+                samplerate=self.sample_rate,
+                blocksize=self.detect_blocksize,
+                dtype="int16",
+                channels=1,
+                device=self.input_device,
+                callback=self._audio_cb
+            )
+            self._stream.start()
+
+            while self.running and not self._stop_event.is_set():
                 time.sleep(0.05)
+
+        except Exception as e:
+            print("VoiceEngine audio error:", e)
+
+        finally:
+            try:
+                if self._stream is not None:
+                    self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
 
     # -----------------------------
     # ASR loop
     # -----------------------------
     def _asr_loop(self):
-        while self.running:
+        while self.running and not self._stop_event.is_set():
+            # If we're awake but time window passed without a final command, sleep again
+            if self.mode == "AWAKE" and time.monotonic() > self.awake_until:
+                self._sleep_mode()
+
             try:
                 data = self.q.get(timeout=0.5)
             except queue.Empty:
                 continue
 
-            # Partial results are useful for fast wake-word spotting [6](https://stackoverflow.com/questions/69173800/how-to-set-a-wake-up-word-for-an-virtual-assistant-using-vosk-offline-speech-rec)
+            if not data:
+                continue
+
+            # Partial results are useful for fast wake-word spotting
             if not self.rec.AcceptWaveform(data):
-                partial = json.loads(self.rec.PartialResult()).get("partial", "").lower()
+                try:
+                    partial = json.loads(self.rec.PartialResult()).get("partial", "").lower()
+                except Exception:
+                    partial = ""
+
                 if self.mode == "SLEEP" and self.WAKE_PHRASE in partial:
                     self._on_wake()
                 continue
 
             # Final result for completed phrase
-            text = json.loads(self.rec.Result()).get("text", "").lower().strip()
+            try:
+                text = json.loads(self.rec.Result()).get("text", "").lower().strip()
+            except Exception:
+                text = ""
+
             if not text:
                 # reset loudness accumulation for the next utterance
                 self._utter_rms_sum = 0.0
@@ -112,7 +180,6 @@ class VoiceEngine:
             self._utter_rms_n = 0
 
             if self.mode == "SLEEP":
-                # Sometimes wake phrase lands in final result too
                 if self.WAKE_PHRASE in text:
                     self._on_wake()
                 continue
@@ -129,14 +196,17 @@ class VoiceEngine:
         self.mode = "AWAKE"
         self.awake_until = now + self.AWAKE_WINDOW
 
-        # Switch recognizer grammar to command set at runtime [3](https://github.com/alphacep/vosk-api/blob/master/python/example/test_words.py)[4](https://deepwiki.com/alphacep/vosk-api/5-usage-examples)
-        self.rec.SetGrammar(self.cmd_grammar)
+        # Switch recognizer grammar to command set
+        try:
+            self.rec.SetGrammar(self.cmd_grammar)
+        except Exception as e:
+            print("VoiceEngine grammar switch error:", e)
 
-        # Little “I’m listening” response
+        # “I’m listening” response
         self.behavior.happy()
 
     # -----------------------------
-    # Voice → emotion mapping (text + intensity)
+    # Voice → emotion mapping
     # -----------------------------
     def _route_command(self, text, avg_rms):
         now = time.monotonic()
@@ -144,8 +214,7 @@ class VoiceEngine:
             self._sleep_mode()
             return
 
-        # Intensity buckets from mic loudness (tweak thresholds to taste)
-        # avg_rms varies by mic; these are simple starter thresholds.
+        # Intensity buckets from mic loudness
         if avg_rms > 2500:
             intensity = "high"
         elif avg_rms > 1200:
@@ -155,7 +224,7 @@ class VoiceEngine:
 
         print(f"Heard: '{text}' (intensity={intensity})")
 
-        # --- Command keywords (explicit mapping) ---
+        # Commands
         if "bark" in text or "woof" in text:
             self.behavior.bark()
         elif "happy" in text or "hello" in text or "good boy" in text or "good dog" in text:
@@ -167,7 +236,7 @@ class VoiceEngine:
         elif "quiet" in text or "calm" in text:
             self.behavior.idle()
         else:
-            # --- Intensity-only fallback (voice→emotion) ---
+            # Intensity-only fallback
             if intensity == "high":
                 self.behavior.bark()
             elif intensity == "mid":
@@ -175,13 +244,16 @@ class VoiceEngine:
             else:
                 self.behavior.sad()
 
-        # After one command, go back to sleep quickly (optional)
+        # After one command, sleep again (your original behavior)
         self._sleep_mode()
 
     def _sleep_mode(self):
         self.mode = "SLEEP"
-        self.rec.SetGrammar(self.wake_grammar)  # grammar swap supported [3](https://github.com/alphacep/vosk-api/blob/master/python/example/test_words.py)[4](https://deepwiki.com/alphacep/vosk-api/5-usage-examples)
+        try:
+            self.rec.SetGrammar(self.wake_grammar)
+        except Exception as e:
+            print("VoiceEngine grammar switch error:", e)
 
-    # Update loop is non-blocking
+    # Update loop is non-blocking (threads do the work)
     def update(self):
         pass
