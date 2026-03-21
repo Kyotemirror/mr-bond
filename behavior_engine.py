@@ -1,6 +1,7 @@
 import time
 import random
 
+
 class BehaviorEngine:
     """
     Simple finite-state behavior controller.
@@ -11,10 +12,10 @@ class BehaviorEngine:
       - sad
       - barking
 
-    Key improvements over the original:
-      - Uses time.monotonic() for stable timing
-      - No time.sleep() inside update() (non-blocking)
-      - Idle micro-behaviors are time-based (not tied to FPS)
+    Design goals:
+      - Non-blocking updates (no sleep in update)
+      - Stable timing using time.monotonic()
+      - Natural idle micro-behaviors
     """
 
     def __init__(self, face, sound):
@@ -25,22 +26,19 @@ class BehaviorEngine:
         self.current_state = "idle"
         self.last_state_change = time.monotonic()
 
-        # Idle micro-behavior (non-blocking) tracking
-        self.micro_active = False
-        self.micro_end_time = 0.0
-        self.MICRO_DURATION = 0.2 
-        self.MICRO_MEAN_INTERVAL = 8.0   # average time between idle micro-smile
-        self.next_micro_time = self.last_state_change + self._sample_next_micro_delay()
-
         # Tunables
         self.BARK_DURATION = 1.0
         self.HAPPY_DURATION = 3.0
         self.SAD_DURATION = 3.0
         self.MICRO_DURATION = 0.2
-        self.MICRO_MEAN_INTERVAL = 8.0  # average time between idle micro-smiles
-        
+        self.MICRO_MEAN_INTERVAL = 8.0  # average seconds between idle micro-smiles
 
-        # Set initial expression
+        # Idle micro-behavior tracking
+        self.micro_active = False
+        self.micro_end_time = 0.0
+        self.next_micro_time = self._now() + self._sample_next_micro_delay()
+
+        # Initial expression
         self.face.set_expression("neutral")
 
     # -----------------------------
@@ -54,8 +52,8 @@ class BehaviorEngine:
 
     def _sample_next_micro_delay(self):
         """
-        Returns the delay (seconds) until the next micro-behavior while idle.
-        Exponential distribution gives a natural randomness (sometimes quick, sometimes longer).
+        Exponential distribution gives natural randomness:
+        sometimes quick, sometimes longer.
         """
         return random.expovariate(1.0 / self.MICRO_MEAN_INTERVAL)
 
@@ -63,8 +61,12 @@ class BehaviorEngine:
     # State helper
     # -----------------------------
     def _set_state(self, state, expression=None):
+        if self.current_state == state:
+            return
+
         if expression is not None:
             self.face.set_expression(expression)
+
         self.current_state = state
         self.last_state_change = self._now()
 
@@ -72,12 +74,11 @@ class BehaviorEngine:
     # Public actions
     # -----------------------------
     def bark(self):
-        # You can optionally guard against bark spam here if needed
         self.face.set_expression("angry")
         self.sound.play()
         self._set_state("barking")
 
-        # While barking, disable micro behaviors
+        # Disable micro behaviors while barking
         self.micro_active = False
 
     def happy(self):
@@ -94,12 +95,12 @@ class BehaviorEngine:
         self.next_micro_time = self._now() + self._sample_next_micro_delay()
 
     # -----------------------------
-    # Update loop
+    # Update loop (non-blocking)
     # -----------------------------
     def update(self):
         now = self._now()
 
-        # --- Timed states (non-blocking) ---
+        # --- Timed states ---
         if self.current_state == "barking":
             if self._elapsed() > self.BARK_DURATION:
                 self.idle()
@@ -115,17 +116,13 @@ class BehaviorEngine:
                 self.idle()
             return
 
-        # --- Idle micro-behaviors (non-blocking) ---
+        # --- Idle micro-behaviors ---
         if self.current_state == "idle":
-            # If a micro expression is currently active, end it when time is up
             if self.micro_active:
                 if now >= self.micro_end_time:
                     self.face.set_expression("neutral")
                     self.micro_active = False
                     self.next_micro_time = now + self._sample_next_micro_delay()
             else:
-                # Start a micro expression when its scheduled time arrives
                 if now >= self.next_micro_time:
                     self.face.set_expression("happy")
-                    self.micro_active = True
-                    self.micro_end_time = now + self.MICRO_DURATION
