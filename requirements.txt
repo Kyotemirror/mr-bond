@@ -1,0 +1,6 @@
+numpy
+opencv-python
+sounddevice
+scipy
+pyttsx3
+gpiozero
