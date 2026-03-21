@@ -90,7 +90,7 @@ class VoiceEngine:
 
         data = bytes(indata)
 
-        # RMS using NumPy (audioop replacement)
+        # RMS using NumPy (Python 3.13 safe)
         samples = np.frombuffer(data, dtype=np.int16)
         if samples.size:
             rms = np.sqrt(np.mean(samples.astype(np.float32) ** 2))
@@ -184,5 +184,51 @@ class VoiceEngine:
             return
 
         self.last_trigger_time = now
-        def update(self):
-            pass
+        self.mode = "AWAKE"
+        self.awake_until = now + self.AWAKE_WINDOW
+
+        self.rec.SetGrammar(self.cmd_grammar)
+        self.behavior.happy()
+
+    def _sleep_mode(self):
+        self.mode = "SLEEP"
+        self.rec.SetGrammar(self.wake_grammar)
+
+    # -----------------------------
+    # Command routing
+    # -----------------------------
+    def _route_command(self, text, avg_rms):
+        if avg_rms > 2500:
+            intensity = "high"
+        elif avg_rms > 1200:
+            intensity = "mid"
+        else:
+            intensity = "low"
+
+        print(f"Heard: '{text}' (intensity={intensity})")
+
+        if "bark" in text or "woof" in text:
+            self.behavior.bark()
+        elif "happy" in text or "hello" in text or "good boy" in text or "good dog" in text:
+            self.behavior.happy()
+        elif "sad" in text or "scared" in text:
+            self.behavior.sad()
+        elif "angry" in text:
+            self.behavior.bark()
+        elif "quiet" in text or "calm" in text:
+            self.behavior.idle()
+        else:
+            if intensity == "high":
+                self.behavior.bark()
+            elif intensity == "mid":
+                self.behavior.happy()
+            else:
+                self.behavior.sad()
+
+        self._sleep_mode()
+
+    # -----------------------------
+    # Engine interface (required by main loop)
+    # -----------------------------
+    def update(self):
+        pass
