@@ -2,6 +2,7 @@ import time
 import threading
 from playsound import playsound
 
+
 class SoundEngine:
     def __init__(self, sound_file="bark.wav", cooldown=0.6, allow_overlap=False):
         self.sound_file = sound_file
@@ -27,25 +28,25 @@ class SoundEngine:
             self._last_play = now
             self._playing = True
 
-        # Always play in a thread so the dog loop never blocks
+        # Always play in a thread so the main loop never blocks
         t = threading.Thread(target=self._play_worker, daemon=True)
         t.start()
 
     def _play_worker(self):
         try:
-            # Some playsound builds ignore block=False; thread makes it safe either way
+            # Thread makes this safe even if block=True
             try:
                 playsound(self.sound_file, block=True)
             except TypeError:
-                # If block arg isn’t supported in this environment
+                # Older playsound versions
                 playsound(self.sound_file)
         except Exception as e:
-            print("Sound error:", e)
+            print("SoundEngine error:", e)
         finally:
             with self._lock:
                 self._playing = False
 
     def stop(self):
-        # playsound generally can't stop mid-playback.
-        # We keep this for API compatibility.
+        # playsound cannot stop mid-playback.
+        # Kept for API compatibility.
         pass
