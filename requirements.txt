@@ -1,6 +1,7 @@
 numpy
 opencv-python
-sounddevice
-scipy
+playsound
 pyttsx3
 gpiozero
+sounddevice
+vosk
