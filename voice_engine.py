@@ -184,3 +184,5 @@ class VoiceEngine:
             return
 
         self.last_trigger_time = now
+        def update(self):
+    pass
