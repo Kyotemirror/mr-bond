@@ -9,7 +9,7 @@ sudo apt install -y \
   python3-tk \
   ffmpeg \
   portaudio19-dev \
-  libatlas-base-dev libopenblas-dev liblapack-dev \
+  libopenblas-dev liblapack-dev \
   v4l-utils
 
 echo "🐍 Creating Python venv..."
