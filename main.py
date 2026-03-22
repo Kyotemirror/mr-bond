@@ -149,4 +149,9 @@ class AIDog:
             pass
 
         print("Bond stopped cleanly.")
-        if __name__ == "__main__":
+
+
+# ✅ ✅ ✅ THIS WAS MISSING ✅ ✅ ✅
+if __name__ == "__main__":
+    dog = AIDog()
+    dog.run()
