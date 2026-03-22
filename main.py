@@ -149,6 +149,4 @@ class AIDog:
             pass
 
         print("Bond stopped cleanly.")
-
-
-if __name__ == "__main__":
+        if __name__ == "__main__":
