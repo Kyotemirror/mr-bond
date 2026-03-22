@@ -1,4 +1,7 @@
 import time
+import sys
+import threading
+import os
 
 from face_engine import FaceEngine
 from sound_engine import SoundEngine
@@ -10,6 +13,7 @@ from bond_ipc_server import BondIPCServer
 class AIDog:
     def __init__(self):
         print("Starting Bond (CORE MODE — NO VOICE)...")
+        print("Press Ctrl+Q to quit Bond")
 
         # -----------------------------
         # Face (fullscreen UI)
@@ -41,10 +45,18 @@ class AIDog:
             self.camera = None
 
         # -----------------------------
-        # IPC (voice comes from outside)
+        # IPC (external voice)
         # -----------------------------
         self.ipc = BondIPCServer(self.handle_voice_message)
         self.ipc.start()
+
+        # -----------------------------
+        # Keyboard kill listener
+        # -----------------------------
+        threading.Thread(
+            target=self._keyboard_kill_listener,
+            daemon=True
+        ).start()
 
         print("Bond running with FACE + CAMERA (VOICE EXTERNAL).")
 
@@ -68,6 +80,17 @@ class AIDog:
                 self.behavior.sad()
             elif cmd in ("quiet", "calm"):
                 self.behavior.idle()
+
+    # -----------------------------
+    # Keyboard kill (Ctrl+Q)
+    # -----------------------------
+    def _keyboard_kill_listener(self):
+        while True:
+            ch = sys.stdin.read(1)
+            if ch == "\x11":  # Ctrl+Q
+                print("\nCtrl+Q pressed — shutting down Bond")
+                self.shutdown()
+                os._exit(0)
 
     # -----------------------------
     # Main loop
@@ -95,6 +118,12 @@ class AIDog:
     # Shutdown
     # -----------------------------
     def shutdown(self):
+        # Kill voice service if running
+        try:
+            os.system("pkill -f voice_service.py")
+        except Exception:
+            pass
+
         try:
             if self.camera and hasattr(self.camera, "release"):
                 self.camera.release()
@@ -123,5 +152,3 @@ class AIDog:
 
 
 if __name__ == "__main__":
-    dog = AIDog()
-    dog.run()
