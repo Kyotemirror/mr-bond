@@ -3,11 +3,12 @@ import time
 from face_engine import FaceEngine
 from sound_engine import SoundEngine
 from behavior_engine import BehaviorEngine
+from camera_engine import CameraEngine
 
 
 class AIDog:
     def __init__(self):
-        print("Starting Bond (SAFE MODE)...")
+        print("Starting Bond (CAMERA TEST MODE)...")
 
         # -----------------------------
         # Face (fullscreen UI)
@@ -24,17 +25,26 @@ class AIDog:
         self.sound = SoundEngine("bark.wav")
 
         # -----------------------------
-        # Behavior (core logic)
+        # Behavior (core brain)
         # -----------------------------
         self.behavior = BehaviorEngine(self.face, self.sound)
 
         # -----------------------------
-        # TEMPORARILY DISABLED
+        # Camera (ENABLED)
         # -----------------------------
-        self.voice = None   # VoiceEngine disabled
-        self.camera = None  # CameraEngine disabled
+        try:
+            self.camera = CameraEngine(self.behavior)
+            print("CameraEngine enabled.")
+        except Exception as e:
+            print("CameraEngine failed to start:", e)
+            self.camera = None
 
-        print("Bond running in SAFE MODE (voice/camera off).")
+        # -----------------------------
+        # Voice (DISABLED for now)
+        # -----------------------------
+        self.voice = None
+
+        print("Bond running with CAMERA enabled, VOICE disabled.")
 
     # -----------------------------
     # Main loop
@@ -49,7 +59,9 @@ class AIDog:
                 # Behavior
                 self.behavior.update()
 
-                # (voice and camera intentionally skipped)
+                # Camera (only native-heavy subsystem enabled)
+                if self.camera:
+                    self.camera.update()
 
                 time.sleep(0.01)
 
@@ -63,6 +75,12 @@ class AIDog:
     # Shutdown
     # -----------------------------
     def shutdown(self):
+        try:
+            if self.camera and hasattr(self.camera, "release"):
+                self.camera.release()
+        except Exception:
+            pass
+
         try:
             if self.sound and hasattr(self.sound, "stop"):
                 self.sound.stop()
