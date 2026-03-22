@@ -3,12 +3,13 @@ import time
 from face_engine import FaceEngine
 from sound_engine import SoundEngine
 from behavior_engine import BehaviorEngine
+from camera_engine import CameraEngine
 from voice_engine import VoiceEngine
 
 
 class AIDog:
     def __init__(self):
-        print("Starting Bond (VOICE TEST MODE)...")
+        print("Starting Bond (FULL MODE)...")
 
         # -----------------------------
         # Face (fullscreen UI)
@@ -30,16 +31,27 @@ class AIDog:
         self.behavior = BehaviorEngine(self.face, self.sound)
 
         # -----------------------------
-        # Voice (ENABLED)
-        # IMPORTANT: pass a real mic index if you know it
+        # Camera (USB webcam)
+        # -----------------------------
+        try:
+            self.camera = CameraEngine(self.behavior)
+            print("CameraEngine enabled.")
+        except Exception as e:
+            print("CameraEngine failed to start:", e)
+            self.camera = None
+
+        # -----------------------------
+        # Voice (USB mic — LOCKED DEVICE)
         # -----------------------------
         try:
             self.voice = VoiceEngine(
                 self.behavior,
-                # input_device=2,   # <-- uncomment & set if needed
+                input_device=3,      # ✅ YOUR USB MIC
+                sample_rate=16000,
+                blocksize=4096
             )
             if not getattr(self.voice, "enabled", True):
-                print("VoiceEngine disabled itself (no mic or model issue).")
+                print("VoiceEngine disabled itself (audio/model issue).")
                 self.voice = None
             else:
                 print("VoiceEngine enabled.")
@@ -47,12 +59,7 @@ class AIDog:
             print("VoiceEngine failed to start:", e)
             self.voice = None
 
-        # -----------------------------
-        # Camera (DISABLED for voice test)
-        # -----------------------------
-        self.camera = None
-
-        print("Bond running with VOICE enabled, CAMERA disabled.")
+        print("Bond running with FACE + CAMERA + VOICE.")
 
     # -----------------------------
     # Main loop
@@ -64,6 +71,9 @@ class AIDog:
                     self.face.update()
 
                 self.behavior.update()
+
+                if self.camera:
+                    self.camera.update()
 
                 if self.voice:
                     self.voice.update()
@@ -80,6 +90,12 @@ class AIDog:
     # Shutdown
     # -----------------------------
     def shutdown(self):
+        try:
+            if self.camera and hasattr(self.camera, "release"):
+                self.camera.release()
+        except Exception:
+            pass
+
         try:
             if self.voice and hasattr(self.voice, "shutdown"):
                 self.voice.shutdown()
