@@ -81,4 +81,3 @@ class AIDog:
 if __name__ == "__main__":
     dog = AIDog()
     dog.run()
-``
