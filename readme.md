@@ -1,8 +1,4 @@
- ________   ________   ________
-/  _____/  /  _____/  /  _____/
-\_____  \  \_____  \  \_____  \
- /      /   /      /   /      /
-/______/   /______/   /______/
+
               0 0 7 v1.0
 
 hello human! My Name Is Bond...Mr.Bond.
@@ -49,5 +45,6 @@ This project blends voice, sound, motion, and perception into a unified robotic 
 # License
 This project is released under the license included in this repository.
 
-
-<img src="mirror/assets/logo.png" width="200">
+<p align="center">
+  <img src="mr-bond/assets/logo.png" width="200">
+</p>
