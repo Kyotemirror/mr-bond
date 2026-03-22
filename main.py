@@ -4,12 +4,12 @@ from face_engine import FaceEngine
 from sound_engine import SoundEngine
 from behavior_engine import BehaviorEngine
 from camera_engine import CameraEngine
-from voice_engine import VoiceEngine
+from bond_ipc_server import BondIPCServer
 
 
 class AIDog:
     def __init__(self):
-        print("Starting Bond (FULL MODE)...")
+        print("Starting Bond (CORE MODE — NO VOICE)...")
 
         # -----------------------------
         # Face (fullscreen UI)
@@ -41,25 +41,33 @@ class AIDog:
             self.camera = None
 
         # -----------------------------
-        # Voice (USB mic — LOCKED DEVICE)
+        # IPC (voice comes from outside)
         # -----------------------------
-        try:
-            self.voice = VoiceEngine(
-                self.behavior,
-                input_device=3,      # ✅ YOUR USB MIC
-                sample_rate=16000,
-                blocksize=4096
-            )
-            if not getattr(self.voice, "enabled", True):
-                print("VoiceEngine disabled itself (audio/model issue).")
-                self.voice = None
-            else:
-                print("VoiceEngine enabled.")
-        except Exception as e:
-            print("VoiceEngine failed to start:", e)
-            self.voice = None
+        self.ipc = BondIPCServer(self.handle_voice_message)
+        self.ipc.start()
 
-        print("Bond running with FACE + CAMERA + VOICE.")
+        print("Bond running with FACE + CAMERA (VOICE EXTERNAL).")
+
+    # -----------------------------
+    # IPC handler
+    # -----------------------------
+    def handle_voice_message(self, msg: dict):
+        msg_type = msg.get("type")
+
+        if msg_type == "wake":
+            self.behavior.happy()
+
+        elif msg_type == "cmd":
+            cmd = (msg.get("cmd") or "").lower()
+
+            if cmd in ("bark", "woof"):
+                self.behavior.bark()
+            elif cmd in ("happy", "hello", "good boy", "good dog"):
+                self.behavior.happy()
+            elif cmd in ("sad", "scared"):
+                self.behavior.sad()
+            elif cmd in ("quiet", "calm"):
+                self.behavior.idle()
 
     # -----------------------------
     # Main loop
@@ -74,9 +82,6 @@ class AIDog:
 
                 if self.camera:
                     self.camera.update()
-
-                if self.voice:
-                    self.voice.update()
 
                 time.sleep(0.01)
 
@@ -97,8 +102,8 @@ class AIDog:
             pass
 
         try:
-            if self.voice and hasattr(self.voice, "shutdown"):
-                self.voice.shutdown()
+            if hasattr(self, "ipc"):
+                self.ipc.stop()
         except Exception:
             pass
 
