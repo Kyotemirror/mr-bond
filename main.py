@@ -1,21 +1,17 @@
 import time
-import os
 
 from face_engine import FaceEngine
 from sound_engine import SoundEngine
 from behavior_engine import BehaviorEngine
-from voice_engine import VoiceEngine
-from camera_engine import CameraEngine
 
 
 class AIDog:
     def __init__(self):
-        print("Starting Bond...")
+        print("Starting Bond (SAFE MODE)...")
 
         # -----------------------------
-        # Face (GUI)
+        # Face (fullscreen UI)
         # -----------------------------
-        # Assumes you are running locally in a GUI session
         self.face = FaceEngine(
             width=480,
             height=320,
@@ -28,30 +24,17 @@ class AIDog:
         self.sound = SoundEngine("bark.wav")
 
         # -----------------------------
-        # Behavior (central brain)
+        # Behavior (core logic)
         # -----------------------------
         self.behavior = BehaviorEngine(self.face, self.sound)
 
         # -----------------------------
-        # Voice (safe initialization)
+        # TEMPORARILY DISABLED
         # -----------------------------
-        try:
-            self.voice = VoiceEngine(self.behavior)
-            if not getattr(self.voice, "enabled", True):
-                print("VoiceEngine disabled (no mic or model issue).")
-                self.voice = None
-        except Exception as e:
-            print("VoiceEngine failed to start:", e)
-            self.voice = None
+        self.voice = None   # VoiceEngine disabled
+        self.camera = None  # CameraEngine disabled
 
-        # -----------------------------
-        # Camera (optional)
-        # -----------------------------
-        try:
-            self.camera = CameraEngine(self.behavior)
-        except Exception as e:
-            print("CameraEngine failed to start:", e)
-            self.camera = None
+        print("Bond running in SAFE MODE (voice/camera off).")
 
     # -----------------------------
     # Main loop
@@ -59,20 +42,14 @@ class AIDog:
     def run(self):
         try:
             while True:
-                # Face update (GUI)
+                # Face UI
                 if self.face:
                     self.face.update()
 
-                # Behavior update
+                # Behavior
                 self.behavior.update()
 
-                # Voice update (non-blocking; may be None)
-                if self.voice:
-                    self.voice.update()
-
-                # Camera update (optional)
-                if self.camera:
-                    self.camera.update()
+                # (voice and camera intentionally skipped)
 
                 time.sleep(0.01)
 
@@ -83,43 +60,25 @@ class AIDog:
             self.shutdown()
 
     # -----------------------------
-    # Shutdown sequence
+    # Shutdown
     # -----------------------------
     def shutdown(self):
-        # Camera cleanup
-        try:
-            if self.camera and hasattr(self.camera, "release"):
-                self.camera.release()
-        except Exception as e:
-            print("Camera shutdown error:", e)
-
-        # Voice cleanup
-        try:
-            if self.voice and hasattr(self.voice, "shutdown"):
-                self.voice.shutdown()
-        except Exception as e:
-            print("Voice shutdown error:", e)
-
-        # Sound cleanup
         try:
             if self.sound and hasattr(self.sound, "stop"):
                 self.sound.stop()
-        except Exception as e:
-            print("Sound shutdown error:", e)
+        except Exception:
+            pass
 
-        # Face cleanup
         try:
             if self.face and hasattr(self.face, "shutdown"):
                 self.face.shutdown()
-        except Exception as e:
-            print("Face shutdown error:", e)
+        except Exception:
+            pass
 
         print("Bond stopped cleanly.")
 
 
-# -----------------------------
-# Entry point
-# -----------------------------
 if __name__ == "__main__":
     dog = AIDog()
     dog.run()
+``
