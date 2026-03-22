@@ -3,12 +3,12 @@ import time
 from face_engine import FaceEngine
 from sound_engine import SoundEngine
 from behavior_engine import BehaviorEngine
-from camera_engine import CameraEngine
+from voice_engine import VoiceEngine
 
 
 class AIDog:
     def __init__(self):
-        print("Starting Bond (CAMERA TEST MODE)...")
+        print("Starting Bond (VOICE TEST MODE)...")
 
         # -----------------------------
         # Face (fullscreen UI)
@@ -30,21 +30,29 @@ class AIDog:
         self.behavior = BehaviorEngine(self.face, self.sound)
 
         # -----------------------------
-        # Camera (ENABLED)
+        # Voice (ENABLED)
+        # IMPORTANT: pass a real mic index if you know it
         # -----------------------------
         try:
-            self.camera = CameraEngine(self.behavior)
-            print("CameraEngine enabled.")
+            self.voice = VoiceEngine(
+                self.behavior,
+                # input_device=2,   # <-- uncomment & set if needed
+            )
+            if not getattr(self.voice, "enabled", True):
+                print("VoiceEngine disabled itself (no mic or model issue).")
+                self.voice = None
+            else:
+                print("VoiceEngine enabled.")
         except Exception as e:
-            print("CameraEngine failed to start:", e)
-            self.camera = None
+            print("VoiceEngine failed to start:", e)
+            self.voice = None
 
         # -----------------------------
-        # Voice (DISABLED for now)
+        # Camera (DISABLED for voice test)
         # -----------------------------
-        self.voice = None
+        self.camera = None
 
-        print("Bond running with CAMERA enabled, VOICE disabled.")
+        print("Bond running with VOICE enabled, CAMERA disabled.")
 
     # -----------------------------
     # Main loop
@@ -52,16 +60,13 @@ class AIDog:
     def run(self):
         try:
             while True:
-                # Face UI
                 if self.face:
                     self.face.update()
 
-                # Behavior
                 self.behavior.update()
 
-                # Camera (only native-heavy subsystem enabled)
-                if self.camera:
-                    self.camera.update()
+                if self.voice:
+                    self.voice.update()
 
                 time.sleep(0.01)
 
@@ -76,8 +81,8 @@ class AIDog:
     # -----------------------------
     def shutdown(self):
         try:
-            if self.camera and hasattr(self.camera, "release"):
-                self.camera.release()
+            if self.voice and hasattr(self.voice, "shutdown"):
+                self.voice.shutdown()
         except Exception:
             pass
 
