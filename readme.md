@@ -46,5 +46,5 @@ This project blends voice, sound, motion, and perception into a unified robotic 
 This project is released under the license included in this repository.
 
 <p align="center">
-  <img src="mr-bond/assets/logo.png" width="200">
+  <img src="mr-bond/logo.png" width="200">
 </p>
