@@ -50,4 +50,4 @@ This project blends voice, sound, motion, and perception into a unified robotic 
 This project is released under the license included in this repository.
 
 
-<img src="bond/assets/logo.png" width="200">
+<img src="mirror/assets/logo.png" width="200">
